@@ -23,8 +23,8 @@ When coaching, it adapts its style based on task type:
 Add the marketplace and install:
 
 ```
-/plugin marketplace add <owner>/coach-mode
-/plugin install coach-mode@<owner>-coach-mode
+/plugin marketplace add spiritinlife/claude-coach-mode
+/plugin install claude-coach-mode@spiritinlife-claude-coach-mode
 ```
 
 On first use, Coach Mode will ask you to set up your engineer profile (name, seniority, domain expertise). After that, it's fully automatic.

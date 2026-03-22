@@ -1,5 +1,5 @@
 ---
-name: coach-mode
+name: claude-coach-mode
 description: >
   An intelligent guardrail for engineer growth in AI-assisted development. This plugin intercepts every coding task via hooks and decides whether the engineer should research and write the code themselves (for learning) or whether the agent should handle it (for efficiency). It maintains a personal learning journal that tracks what the engineer has practiced, prevents repetitive friction on already-mastered skills, and adapts its coaching style based on task complexity. This skill contains the detailed classification logic and coaching instructions referenced by the plugin's hooks. Use this skill whenever you need to consult the full decision framework — the UserPromptSubmit hook injects a summary automatically, but for edge cases or when you need to review the detailed taxonomy, read this file.
 ---
