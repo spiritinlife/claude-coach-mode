@@ -39,9 +39,70 @@ Coach Mode maintains a personal learning journal at `~/.coach-mode/` (configurab
 
 The journal is designed to be useful for self-reflection, 1:1s with your lead, or onboarding into new domains.
 
+## Project-Level Configuration
+
+For teams, senior engineers can create a `.claude/coaching.md` file in the repository to define project-wide coaching rules that apply to all team members.
+
+### Quick Start
+
+Create `.claude/coaching.md` in your project root:
+
+```markdown
+# Project Coaching Rules
+
+## Project Info
+- **Project**: My Project
+- **Maintained by**: @senior-dev
+
+## Category Overrides
+
+### Always Coach
+- **Pattern**: Changes to authentication or permissions
+  - **Reason**: Security-critical code requires understanding
+
+### Just Do It
+- **Pattern**: CRUD endpoints using our standard templates
+  - **Reason**: Fully standardized, see /templates/
+
+### Custom Thresholds
+| Task Type | Threshold | Reason |
+|-----------|-----------|--------|
+| GraphQL resolvers | 3 | Non-standard patterns |
+
+## Domain-Specific Rules
+
+### Billing System
+- **Coaching level**: always
+- **Key concepts**: Payment flows, refund logic, compliance
+```
+
+### Rule Hierarchy
+
+1. **Project rules** (`.claude/coaching.md`) — Team-wide, mandatory
+2. **Personal rules** (`~/.coach-mode/config.md`) — Individual additions
+3. **Default rules** (built-in) — Fallback behavior
+
+Personal config can add stricter coaching (more practice) but cannot bypass project safety rules.
+
+### For Maintainers
+
+See [SKILL.md](skills/claude-coach-mode/SKILL.md) for the full project config format, detailed examples, and the complete decision framework.
+
+A copyable template is available at [templates/project-coaching-template.md](templates/project-coaching-template.md).
+
 ## Overrides
 
 Say "just do it" or "skip" at any time and Coach Mode will comply immediately. It's a guardrail, not a gatekeeper.
+
+## Token Optimization
+
+Coach Mode uses a **minimal injection architecture** to reduce token costs by ~90%:
+
+- **Minimal hook** (~300 tokens) — Only essential context injected on every message
+- **On-demand skill** (`/coach-mode-details`) — Full framework loaded only when needed
+- **Haiku classifier** (`@coach-classifier`) — Cheap, fast classification for edge cases
+
+For most tasks, the minimal injection is enough. Edge cases can invoke the full framework or classifier as needed.
 
 ## License
 

@@ -1,7 +1,7 @@
 {
   "name": "claude-coach-mode",
   "description": "An intelligent guardrail for engineer growth in AI-assisted development. Intercepts coding tasks and decides whether the engineer should do the work themselves (for learning) or the agent should handle it (for efficiency). Maintains a personal learning journal tracking skill progression.",
-  "version": "1.0.3",
+  "version": "1.2.0",
   "author": {
     "name": "George",
     "email": "george@vendora.gr"

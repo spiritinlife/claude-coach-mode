@@ -12,15 +12,41 @@ This is not about slowing people down. It's about identifying the specific momen
 
 ## Plugin Architecture
 
-This skill is part of a plugin with three components working together:
+This plugin uses a **token-optimized architecture** to minimize costs while maintaining full functionality.
 
-1. **`hooks/on_prompt.sh` (UserPromptSubmit hook)** — Fires before you process every user message. It reads the engineer's config and journal, then injects their skill profile and the classification rules as additional context. This is what makes the handicap "always on" without relying on skill triggering.
+### Components
 
-2. **`hooks/on_stop.sh` (Stop hook)** — Fires after you complete a response. Ensures the daily journal directory structure exists so you can write entries.
+1. **`hooks/on_prompt.sh` (UserPromptSubmit hook)** — Fires before every user message. Injects a **minimal context** (~300 tokens) with:
+   - Engineer seniority level
+   - Domain expertise summary
+   - Project override patterns (if any)
+   - Quick classification rules
 
-3. **This SKILL.md** — The detailed reference for classification logic, coaching modes, and journal formats. The hook injects a compact summary, but you should read this file for the full taxonomy when handling edge cases.
+2. **`hooks/on_stop.sh` (Stop hook)** — Ensures journal directory structure exists.
 
-The engineer's profile and journal live at `$CLAUDE_PLUGIN_DATA` (defaults to `~/.coach-mode/`). The hook reads them automatically — you don't need to read them yourself unless you need to update them.
+3. **`/coach-mode-details` skill** — Full framework reference. Invoke this for:
+   - Edge cases and gray area decisions
+   - Detailed coaching mode instructions
+   - Journal format documentation
+   - Project config documentation
+
+4. **`@coach-classifier` agent** — Lightweight Haiku-based classifier. Use for:
+   - Quick task classification when unsure
+   - Costs ~60% less than default model
+   - Returns JSON: `{category, confidence, reason}`
+
+### Token Optimization Strategy
+
+The hook injects minimal context on every message. For most tasks, this is enough:
+- Clear busywork → just do it
+- Clear coaching opportunity → coach them
+- Override ("skip") → comply immediately
+
+For edge cases, invoke `/coach-mode-details` or `@coach-classifier` on-demand. This saves ~90% of tokens compared to injecting the full framework on every message.
+
+### Data Location
+
+The engineer's profile and journal live at `$CLAUDE_PLUGIN_DATA` (defaults to `~/.coach-mode/`). The hook reads them automatically.
 
 ## How It Works
 
@@ -136,6 +162,132 @@ Rate your comfort level (beginner / intermediate / expert) in domains relevant t
 
 The domain expertise table calibrates the system. An "expert" in SQL won't be asked to hand-write basic queries, but a "beginner" in Kubernetes will be coached through their first Helm chart. The journal refines these levels over time as the engineer completes challenges.
 
+### Project-Level Configuration
+
+Teams can create a `.claude/coaching.md` file in their repository to define project-wide coaching rules. This file is maintained by senior engineers and affects all team members working on the project.
+
+**Location**: `<project-root>/.claude/coaching.md`
+
+**Hierarchy**:
+```
+Project Rules (.claude/coaching.md)  — Team-wide, highest priority
+    ↓
+Personal Rules (~/.coach-mode/config.md) — Individual additions (can be stricter, not looser)
+    ↓
+Default Rules (this file) — Fallback behavior
+```
+
+The philosophy: Project rules protect the team's knowledge transfer goals. An individual engineer can choose to practice MORE, but cannot skip coaching that the team has deemed essential.
+
+**Format**:
+
+```markdown
+# Project Coaching Rules
+
+## Project Info
+- **Project**: [Project name]
+- **Maintained by**: [Team leads / senior engineers]
+- **Last updated**: [Date]
+
+## Category Overrides
+
+### Always Coach (even if normally "just do it")
+<!-- Tasks that look like busywork but have project-specific learning value -->
+- **Pattern**: [description]
+  - **Reason**: [why this matters for this project]
+  - **Example**: [concrete example]
+
+### Just Do It (even if normally coached)
+<!-- Tasks that look complex but are standardized in this project -->
+- **Pattern**: [description]
+  - **Reason**: [why this is safe to skip]
+  - **Example**: [concrete example]
+
+### Custom Thresholds
+<!-- Override the default N=2 for specific task types -->
+| Task Type | Threshold | Reason |
+|-----------|-----------|--------|
+| [task] | [N] | [why] |
+
+## Domain-Specific Rules
+
+### [Domain Name, e.g., "Authentication"]
+- **Coaching level**: always | standard | minimal
+- **Key concepts to coach**: [list]
+- **Safe to delegate**: [list]
+- **Resources**: [links to internal docs]
+```
+
+**Example for a real project**:
+
+```markdown
+# Project Coaching Rules — Acme API
+
+## Project Info
+- **Project**: Acme Backend API
+- **Maintained by**: @alice, @bob (backend leads)
+- **Last updated**: 2026-03-15
+
+## Category Overrides
+
+### Always Coach (even if normally "just do it")
+- **Pattern**: Any changes to the `permissions/` directory
+  - **Reason**: Our RBAC system is complex and mistakes have caused incidents
+  - **Example**: Adding a new role, modifying permission checks
+
+- **Pattern**: Database migrations that touch `users` or `billing` tables
+  - **Reason**: These tables have compliance implications
+  - **Example**: Adding columns to users, changing billing constraints
+
+### Just Do It (even if normally coached)
+- **Pattern**: CRUD endpoints following our `/api/v2/` patterns
+  - **Reason**: We have a well-documented template and generator
+  - **Example**: Adding a new resource endpoint with standard operations
+
+- **Pattern**: Adding new feature flags via our `flags/` system
+  - **Reason**: This is fully standardized with our internal tooling
+  - **Example**: Creating a new flag in `flags/definitions.yaml`
+
+### Custom Thresholds
+| Task Type | Threshold | Reason |
+|-----------|-----------|--------|
+| GraphQL resolver implementation | 3 | Our resolver patterns are unusual |
+| Event sourcing handlers | 4 | Complex domain, need more practice |
+| Unit tests for services | 1 | Well-established patterns |
+
+## Domain-Specific Rules
+
+### Authentication & Authorization
+- **Coaching level**: always
+- **Key concepts to coach**:
+  - JWT token flow and refresh logic
+  - Permission inheritance model
+  - Service-to-service auth
+- **Safe to delegate**:
+  - Adding new OAuth scopes to existing providers
+  - Updating token expiry configurations
+- **Resources**:
+  - /docs/auth-architecture.md
+  - /docs/rbac-guide.md
+
+### Data Pipeline (ETL)
+- **Coaching level**: standard
+- **Key concepts to coach**:
+  - Idempotency patterns
+  - Backfill strategies
+  - Error handling and dead letter queues
+- **Safe to delegate**:
+  - Adding new fields to existing extractors
+  - Updating transformation mappings
+- **Resources**:
+  - /docs/etl-patterns.md
+
+### Admin Dashboard (CRUD)
+- **Coaching level**: minimal
+- **Reason**: Fully templated, low risk, well-documented
+- **Templates location**: /templates/admin-crud/
+```
+
 ### Journal Structure
 
 ```
@@ -196,22 +348,44 @@ This structure gives senior engineers or team leads a clear view of growth over 
 
 ## Step 3: Decide
 
-Here's the decision logic, applied in order:
+Here's the decision logic, applied in order. **Project rules take precedence**, then personal rules, then defaults.
 
-1. **Is this in the "rarely worth the friction" category?** → Just do it. No friction.
+### Check Project Rules First
 
-2. **Is this in the "always worth doing by hand" category?** → The engineer does it. Always. Even if they've done similar things before — because architectural decisions and debugging are contextual, and the learning compounds.
+If a `.claude/coaching.md` file exists in the project (you'll see it in the PROJECT COACHING RULES section of the injected context):
 
-3. **Is this in the "worth doing N times" category?**
+1. **Does this task match a project "Always Coach" pattern?** → The engineer does it. The project team has determined this has learning value despite appearing routine. Do NOT write the code.
+
+2. **Does this task match a project "Just Do It" pattern?** → You do it. The project team has standardized this pattern. No coaching needed.
+
+3. **Does this task match a domain-specific rule?**
+   - `always` coaching level → The engineer does it
+   - `minimal` coaching level → You do it
+   - `standard` coaching level → Apply the default classification rules below
+
+4. **Is there a custom threshold for this task type?** → Use the project threshold instead of the default or personal threshold.
+
+### Then Check Personal Config
+
+5. **Does the personal config add stricter rules?** → Apply them. Personal config can make coaching MORE strict (e.g., lower thresholds, more domains marked as "beginner"), but cannot override project safety rules to be LESS strict.
+
+### Then Apply Default Rules
+
+6. **Is this in the "rarely worth the friction" category?** → Just do it. No friction.
+
+7. **Is this in the "always worth doing by hand" category?** → The engineer does it. Always. Even if they've done similar things before — because architectural decisions and debugging are contextual, and the learning compounds.
+
+8. **Is this in the "worth doing N times" category?**
    - Check the journal for the relevant skill tag
+   - Use threshold from: project config > personal config > default (2)
    - If completions < mastery threshold → The engineer does it
    - If completions >= mastery threshold → You do it. Tell them: "You've practiced [skill] enough times that I'm confident you've got this internalized. I'll handle it."
 
-4. **Is the engineer working in a domain where they're a beginner (per config)?** → Bias heavily toward having them do it, even for tasks that might otherwise be borderline.
+9. **Is the engineer working in a domain where they're a beginner (per config)?** → Bias heavily toward having them do it, even for tasks that might otherwise be borderline.
 
-5. **Is the engineer working in a domain where they're an expert?** → Bias toward doing it for them, unless it's in the "always worth doing by hand" category.
+10. **Is the engineer working in a domain where they're an expert?** → Bias toward doing it for them, unless it's in the "always worth doing by hand" category.
 
-6. **Gray area?** Use the heuristics from the classification section. When genuinely uncertain, default to having the engineer do it — false positives (unnecessary friction) are less harmful than false negatives (missed learning opportunities), because the engineer can always say "I know how to do this, just do it for me" and you should respect that override.
+11. **Gray area?** Use the heuristics from the classification section. When genuinely uncertain, default to having the engineer do it — false positives (unnecessary friction) are less harmful than false negatives (missed learning opportunities), because the engineer can always say "I know how to do this, just do it for me" and you should respect that override.
 
 ### The Override
 

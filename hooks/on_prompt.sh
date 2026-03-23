@@ -14,6 +14,30 @@ DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.coach-mode}"
 CONFIG_FILE="$DATA_DIR/config.md"
 JOURNAL_FILE="$DATA_DIR/journal.md"
 
+# Project-level config detection
+# Find project root by looking for .git directory
+find_project_root() {
+  local dir="$PWD"
+  while [ "$dir" != "/" ]; do
+    if [ -d "$dir/.git" ]; then
+      echo "$dir"
+      return 0
+    fi
+    dir=$(dirname "$dir")
+  done
+  return 1
+}
+
+PROJECT_ROOT=$(find_project_root 2>/dev/null || echo "")
+PROJECT_CONFIG=""
+PROJECT_CONFIG_PATH=""
+
+if [ -n "$PROJECT_ROOT" ] && [ -f "$PROJECT_ROOT/.claude/coaching.md" ]; then
+  PROJECT_CONFIG_PATH="$PROJECT_ROOT/.claude/coaching.md"
+  # Read first 100 lines to prevent overly large injections
+  PROJECT_CONFIG=$(head -100 "$PROJECT_CONFIG_PATH")
+fi
+
 # If no config exists yet, inject first-run setup instructions
 if [ ! -f "$CONFIG_FILE" ]; then
   cat <<'CONTEXT'
@@ -27,60 +51,48 @@ CONTEXT
   exit 0
 fi
 
-# Read the config and recent journal entries to build context
-PROFILE=""
+# Extract minimal profile info (seniority + domain expertise table only)
+SENIORITY=""
+DOMAINS=""
 if [ -f "$CONFIG_FILE" ]; then
-  PROFILE=$(head -50 "$CONFIG_FILE")
+  # Extract seniority level
+  SENIORITY=$(grep -i "seniority" "$CONFIG_FILE" | head -1 | sed 's/.*: *//' || echo "unknown")
+  # Extract domain expertise table (compact format)
+  DOMAINS=$(awk '/\| Domain/,/^$/' "$CONFIG_FILE" | head -10 || echo "")
 fi
 
-RECENT_JOURNAL=""
+# Extract mastered skills count from journal (just the summary line)
+MASTERED_COUNT=""
 if [ -f "$JOURNAL_FILE" ]; then
-  # Get the last 30 lines of the aggregate journal (most recent skills)
-  RECENT_JOURNAL=$(tail -30 "$JOURNAL_FILE")
+  MASTERED_COUNT=$(grep -c "mastered" "$JOURNAL_FILE" 2>/dev/null || echo "0")
 fi
 
-# Also check today's daily journal for session continuity
-TODAY=$(date '+%Y-%m-%d')
-DAILY_FILE="$DATA_DIR/daily/$TODAY.md"
-TODAYS_ENTRIES=""
-if [ -f "$DAILY_FILE" ]; then
-  TODAYS_ENTRIES=$(tail -20 "$DAILY_FILE")
+# Extract project overrides summary (just the patterns, not full descriptions)
+PROJECT_SUMMARY=""
+if [ -n "$PROJECT_CONFIG" ]; then
+  # Get just the pattern lines for quick reference
+  PROJECT_SUMMARY=$(echo "$PROJECT_CONFIG" | grep -E "^\- \*\*Pattern\*\*:" | head -10 || echo "")
 fi
 
-# Build the context injection
-# We use jq to safely JSON-encode the multi-line strings
+# Build MINIMAL context injection (~300 tokens instead of 2-3KB)
 CONTEXT_TEXT=$(cat <<EOF
 [COACH MODE — ACTIVE]
-The Coach Mode plugin is active. Before writing any code, classify this task:
+Seniority: $SENIORITY | Mastered skills: $MASTERED_COUNT | Journal: $DATA_DIR
 
-TASK CLASSIFICATION (apply in order):
-1. Busywork (boilerplate, config, CRUD, migrations, formatting) → Just do it. No coaching.
-2. Always handicap (architecture, debugging, system design, evaluating tradeoffs, root cause analysis, first-time business logic) → Coach them. Do NOT write the code.
-3. Do-N-times tasks (tests for new frameworks, schema design for new domains, complex queries in unfamiliar languages, new infra setup) → Check journal completion count vs mastery threshold.
-4. Gray area → Default to handicapping. Engineer can override with "just do it."
+QUICK RULES:
+- "just do it" / "skip" → comply immediately, no argument
+- Busywork (boilerplate, config, CRUD, formatting) → just do it
+- Architecture, debugging, system design → coach them (Socratic mode)
+- Gray area → default to coaching, engineer can override
 
-COACHING MODES:
-- Architectural decisions → Socratic mode: ask guiding questions, point to specific docs, don't give answers
-- Debugging → Guided investigation: make them read the stack trace, form hypotheses
-- Do-N-times tasks → Explain-then-pause: explain concepts, let them write the code
-- Override respected → If engineer says "just do it" or "skip", comply immediately
+$( [ -n "$PROJECT_SUMMARY" ] && echo "PROJECT OVERRIDES:
+$PROJECT_SUMMARY" )
 
-ENGINEER PROFILE:
-$PROFILE
+$( [ -n "$DOMAINS" ] && echo "DOMAINS:
+$DOMAINS" )
 
-RECENT SKILL HISTORY:
-$RECENT_JOURNAL
-
-TODAY'S PRACTICE:
-$TODAYS_ENTRIES
-
-JOURNAL RULES:
-- After a handicapped task where the engineer does the work: write a daily journal entry AND update the aggregate journal
-- After busywork you handle: no journal entry needed
-- After an override (engineer said "skip"): note the skip in the daily journal
-- Journal location: $DATA_DIR
-- Daily files go in: $DATA_DIR/daily/
-- Aggregate journal: $DATA_DIR/journal.md
+FOR EDGE CASES: Use /coach-mode-details for full classification rules, coaching modes, and journal format.
+FOR CLASSIFICATION HELP: Use the @coach-classifier agent (uses Haiku for fast, cheap decisions).
 EOF
 )
 
