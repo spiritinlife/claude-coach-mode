@@ -1,10 +1,8 @@
 #!/bin/bash
 # Coach Mode — Stop hook
 # Fires when Claude completes a response.
-# Checks if journal directory exists and ensures daily file is created.
-# The actual journal writing is done by Claude in-conversation (it has
-# the context about what happened), but this hook ensures the directory
-# structure is ready.
+# 1. Ensures journal directory structure exists
+# 2. Sets a marker so the next prompt triggers a journal check
 
 set -euo pipefail
 
@@ -25,5 +23,9 @@ if [ ! -f "$DAILY_FILE" ]; then
   echo "# Learning Journal — $TODAY" > "$DAILY_FILE"
   echo "" >> "$DAILY_FILE"
 fi
+
+# Set marker for journal check on next prompt
+# Include timestamp so we can show the correct time in journal entries
+date '+%H:%M' > "$DATA_DIR/.journal-pending"
 
 exit 0

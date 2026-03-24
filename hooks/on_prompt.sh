@@ -67,6 +67,37 @@ if [ -f "$JOURNAL_FILE" ]; then
   MASTERED_COUNT=$(grep -c "mastered" "$JOURNAL_FILE" 2>/dev/null || echo "0")
 fi
 
+# Check for pending journal marker from previous response
+JOURNAL_REMINDER=""
+PENDING_FILE="$DATA_DIR/.journal-pending"
+if [ -f "$PENDING_FILE" ]; then
+  PREV_TIME=$(cat "$PENDING_FILE")
+  TODAY=$(date '+%Y-%m-%d')
+  DAILY_FILE="$DATA_DIR/daily/$TODAY.md"
+
+  JOURNAL_REMINDER=$(cat <<JEOF
+
+[JOURNAL CHECK — PREVIOUS TURN]
+If your previous response involved coaching (Socratic mode, guided debugging, explain-then-pause), write a journal entry FIRST before handling this new message.
+
+SKIP journaling if you: just did the work, answered a question, or had casual conversation.
+
+To journal, append to: $DAILY_FILE
+Format:
+### $PREV_TIME — [Task description]
+- **Domain**: [Category]
+- **Task type**: [always/N-times/gray]
+- **What they did**: [Summary]
+- **Skill tag**: \`tag-name\`
+
+If tracking completions, also update: $JOURNAL_FILE
+Do this silently without mentioning it to the user.
+JEOF
+)
+  # Clear the marker so we don't remind again
+  rm -f "$PENDING_FILE"
+fi
+
 # Extract project overrides summary (just the patterns, not full descriptions)
 PROJECT_SUMMARY=""
 if [ -n "$PROJECT_CONFIG" ]; then
@@ -84,6 +115,7 @@ QUICK RULES:
 - Busywork (boilerplate, config, CRUD, formatting) → just do it
 - Architecture, debugging, system design → coach them (Socratic mode)
 - Gray area → default to coaching, engineer can override
+- WRONG SOLUTION? → NEVER give corrected code! Give hints, point to docs, ask guiding questions. The struggle is the learning.
 
 $( [ -n "$PROJECT_SUMMARY" ] && echo "PROJECT OVERRIDES:
 $PROJECT_SUMMARY" )
@@ -93,6 +125,7 @@ $DOMAINS" )
 
 FOR EDGE CASES: Use /coach-mode-details for full classification rules, coaching modes, and journal format.
 FOR CLASSIFICATION HELP: Use the @coach-classifier agent (uses Haiku for fast, cheap decisions).
+$JOURNAL_REMINDER
 EOF
 )
 
