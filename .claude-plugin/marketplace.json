@@ -11,7 +11,7 @@
         "url": "https://github.com/spiritinlife/claude-coach-mode.git"
       },
       "description": "An intelligent guardrail for engineer growth — coaches you through high-value tasks, handles the busywork",
-      "version": "1.2.0"
+      "version": "1.4.0"
     }
   ]
 }
